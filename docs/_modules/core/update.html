@@ -4,11 +4,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>core.update &#8212;  Source.Python  v742 documentation</title>
+    <title>core.update &#8212;  Source.Python  v743 documentation</title>
     <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../../_static/classic.css?v=2780edc4" />
     
-    <script src="../../_static/documentation_options.js?v=12c636f2"></script>
+    <script src="../../_static/documentation_options.js?v=b6beb2eb"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     
@@ -25,7 +25,7 @@
         <li class="right" >
           <a href="../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v742 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v743 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="../core.html" accesskey="U">core</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">core.update</a></li> 
@@ -111,7 +111,8 @@
 <span class="n">DATA_URL</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BASE_DATA_URL</span><span class="si">}</span><span class="s1">/source-python-data.zip&#39;</span>
 
 <span class="n">BASE_DOWNLOAD_URL</span> <span class="o">=</span> <span class="s1">&#39;http://downloads.sourcepython.com&#39;</span>
-<span class="n">ARTIFACTS_URL</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BASE_DOWNLOAD_URL</span><span class="si">}</span><span class="s1">/artifacts.txt&#39;</span>
+
+<span class="n">LATEST_RELEASE_URL</span> <span class="o">=</span> <span class="s2">&quot;https://api.github.com/repos/Source-Python-Dev-Team/Source.Python/releases/latest&quot;</span>
 
 <span class="n">DEFAULT_TIMEOUT</span> <span class="o">=</span> <span class="mi">3</span>
 
@@ -189,8 +190,10 @@
 <span class="sd">        Number of seconds that need to pass until a timeout occurs.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">update_logger</span><span class="o">.</span><span class="n">log_debug</span><span class="p">(</span><span class="s1">&#39;Getting artifacts...&#39;</span><span class="p">)</span>
-    <span class="k">with</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">ARTIFACTS_URL</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span> <span class="k">as</span> <span class="n">url</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">url</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">)</span></div>
+    <span class="k">with</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">LATEST_RELEASE_URL</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span> <span class="k">as</span> <span class="n">url</span><span class="p">:</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">[</span><span class="n">asset</span><span class="p">[</span><span class="s1">&#39;browser_download_url&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">asset</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;assets&#39;</span><span class="p">,</span> <span class="p">[])]</span></div>
 
 
 <div class="viewcode-block" id="get_download_url">
@@ -206,9 +209,9 @@
 <span class="sd">    :raise ValueError:</span>
 <span class="sd">        Raised if the game wasn&#39;t found.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">for</span> <span class="n">relative_path</span> <span class="ow">in</span> <span class="n">get_build_artifacts</span><span class="p">(</span><span class="n">timeout</span><span class="p">):</span>
-        <span class="k">if</span> <span class="sa">f</span><span class="s1">&#39;-</span><span class="si">{</span><span class="n">game</span><span class="si">}</span><span class="s1">-&#39;</span> <span class="ow">in</span> <span class="n">relative_path</span><span class="p">:</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">BASE_DOWNLOAD_URL</span><span class="si">}</span><span class="s1">/</span><span class="si">{</span><span class="n">relative_path</span><span class="si">}</span><span class="s1">&#39;</span>
+    <span class="k">for</span> <span class="n">download_url</span> <span class="ow">in</span> <span class="n">get_build_artifacts</span><span class="p">(</span><span class="n">timeout</span><span class="p">):</span>
+        <span class="k">if</span> <span class="sa">f</span><span class="s1">&#39;-</span><span class="si">{</span><span class="n">game</span><span class="si">}</span><span class="s1">-&#39;</span> <span class="ow">in</span> <span class="n">download_url</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">download_url</span>
 
     <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unable to find a download URL for game &quot;</span><span class="si">{</span><span class="n">game</span><span class="si">}</span><span class="s1">&quot;.&#39;</span><span class="p">)</span></div>
 
@@ -409,7 +412,7 @@
         <li class="right" >
           <a href="../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v742 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v743 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="../core.html" >core</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">core.update</a></li> 

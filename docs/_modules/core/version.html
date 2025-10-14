@@ -4,11 +4,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>core.version &#8212;  Source.Python  v742 documentation</title>
+    <title>core.version &#8212;  Source.Python  v743 documentation</title>
     <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=03e43079" />
     <link rel="stylesheet" type="text/css" href="../../_static/classic.css?v=2780edc4" />
     
-    <script src="../../_static/documentation_options.js?v=12c636f2"></script>
+    <script src="../../_static/documentation_options.js?v=b6beb2eb"></script>
     <script src="../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     
@@ -25,7 +25,7 @@
         <li class="right" >
           <a href="../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v742 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v743 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="../core.html" accesskey="U">core</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">core.version</a></li> 
@@ -46,6 +46,7 @@
 <span class="c1"># &gt;&gt; IMPORTS</span>
 <span class="c1"># =============================================================================</span>
 <span class="c1"># Python Imports</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">urllib.request</span><span class="w"> </span><span class="kn">import</span> <span class="n">urlopen</span>
 <span class="c1"># Source.Python Imports</span>
 <span class="c1">#   Cvars</span>
@@ -66,14 +67,13 @@
 <span class="c1"># &gt;&gt; CONSTANTS</span>
 <span class="c1"># =============================================================================</span>
 <span class="c1">#: Version of the Source.Python intallation.</span>
-<span class="n">VERSION</span> <span class="o">=</span> <span class="mi">742</span>
+<span class="n">VERSION</span> <span class="o">=</span> <span class="mi">743</span>
 
 <span class="c1">#: The Github commit this Source.Python version was built with.</span>
-<span class="n">GIT_COMMIT</span> <span class="o">=</span> <span class="s1">&#39;3e5dd5de0323db803d0e3499a229ba2529fc463a&#39;</span>
+<span class="n">GIT_COMMIT</span> <span class="o">=</span> <span class="s1">&#39;4cad55d4145ff7bf24aea6df9a53a9683df81700&#39;</span>
 
 <span class="n">LAST_SUCCESSFUL_BUILD_NUMBER_URL</span> <span class="o">=</span> <span class="p">(</span>
-    <span class="s1">&#39;http://downloads.sourcepython.com/version.txt&#39;</span><span class="p">)</span>
-
+    <span class="s1">&#39;https://api.github.com/repos/Source-Python-Dev-Team/Source.Python/releases/latest&#39;</span><span class="p">)</span>
 
 <span class="c1"># =============================================================================</span>
 <span class="c1"># &gt;&gt; GLOBAL VARIABLES</span>
@@ -94,7 +94,9 @@
 <span class="sd">    :rtype: int</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">with</span> <span class="n">urlopen</span><span class="p">(</span><span class="n">LAST_SUCCESSFUL_BUILD_NUMBER_URL</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span> <span class="k">as</span> <span class="n">url</span><span class="p">:</span>
-        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">url</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">))</span></div>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+        <span class="n">tag_name</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s1">&#39;tag_name&#39;</span><span class="p">]</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="n">tag_name</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span></div>
 
 
 <div class="viewcode-block" id="is_unversioned">
@@ -145,7 +147,7 @@
         <li class="right" >
           <a href="../../py-modindex.html" title="Python Module Index"
              >modules</a> |</li>
-        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v742 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-0"><a href="../../index.html"> Source.Python  v743 documentation</a> &#187;</li>
           <li class="nav-item nav-item-1"><a href="../index.html" >Module code</a> &#187;</li>
           <li class="nav-item nav-item-2"><a href="../core.html" >core</a> &#187;</li>
         <li class="nav-item nav-item-this"><a href="">core.version</a></li> 
