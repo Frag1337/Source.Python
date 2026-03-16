@@ -21,7 +21,7 @@ from sphinx.util.osutil import SEP, _last_modified_time
 if TYPE_CHECKING:
     import datetime as dt
     from collections.abc import Iterator
-    from typing import Protocol, TypeAlias
+    from typing import Protocol
 
     from babel.core import Locale
 
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
             locale: str | Locale | None = ...,
         ) -> str: ...
 
-    Formatter: TypeAlias = DateFormatter | TimeFormatter | DatetimeFormatter
+    type Formatter = DateFormatter | TimeFormatter | DatetimeFormatter
 
 from datetime import UTC
 
@@ -168,7 +168,7 @@ def docname_to_domain(docname: str, compaction: bool | str) -> str:
     if isinstance(compaction, str):
         return compaction
     if compaction:
-        return docname.split(SEP, 1)[0]
+        return docname.partition(SEP)[0]
     else:
         return docname
 
@@ -218,7 +218,7 @@ date_format_re = re.compile('(%s)' % '|'.join(date_format_mappings))
 
 
 def babel_format_date(
-    date: datetime,
+    date: dt.datetime,
     format: str,
     locale: str,
     formatter: Formatter = babel.dates.format_date,
@@ -227,6 +227,14 @@ def babel_format_date(
     # related formats.
     if not hasattr(date, 'tzinfo'):
         formatter = babel.dates.format_date
+
+    if not locale:
+        # Babel would not accept a falsy locale
+        # (or would try to fall back to the LC_TIME
+        # locale, which would be not what was requested),
+        # so we can just short-cut to English, as we
+        # would for the `"fallback to English"` case.
+        locale = 'en'
 
     try:
         return formatter(date, format, locale=locale)
@@ -311,7 +319,7 @@ def get_image_filename_for_language(
 ) -> str:
     root, ext = os.path.splitext(filename)
     dirname = os.path.dirname(root)
-    docpath = os.path.dirname(env.docname)
+    docpath = os.path.dirname(env.current_document.docname)
     try:
         return env.config.figure_language_filename.format(
             root=root,

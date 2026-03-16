@@ -151,7 +151,7 @@ class DefinitionParser(BaseParser):
 
     def _parse_string(self) -> str:
         if self.current_char != '"':
-            return None
+            return None  # ty: ignore[invalid-return-type]
         start_pos = self.pos
         self.pos += 1
         escape = False
@@ -234,7 +234,7 @@ class DefinitionParser(BaseParser):
                     ' resulting in multiple decoded characters.'
                 )
             return _udl(char_lit)
-        return None
+        return None  # ty: ignore[invalid-return-type]
 
     def _parse_fold_or_paren_expression(self) -> ASTExpression | None:
         # "(" expression ")"
@@ -323,7 +323,7 @@ class DefinitionParser(BaseParser):
         nn = self._parse_nested_name()
         if nn is not None:
             return ASTIdExpression(nn)
-        return None
+        return None  # ty: ignore[invalid-return-type]
 
     def _parse_initializer_list(
         self, name: str, open: str, close: str
@@ -333,7 +333,7 @@ class DefinitionParser(BaseParser):
         #  | initializer-list ',' initializer-clause '...'[opt]
         self.skip_ws()
         if not self.skip_string_and_ws(open):
-            return None, None
+            return None, None  # ty: ignore[invalid-return-type]
         if self.skip_string(close):
             return [], False
 
@@ -365,11 +365,11 @@ class DefinitionParser(BaseParser):
         #
         # expression-list
         # -> initializer-list
-        exprs, trailing_comma = self._parse_initializer_list(
+        exprs, _trailing_comma = self._parse_initializer_list(
             'parenthesized expression-list', '(', ')'
         )
         if exprs is None:
-            return None
+            return None  # ty: ignore[invalid-return-type]
         return ASTParenExprList(exprs)
 
     def _parse_initializer_clause(self) -> ASTExpression | ASTBracedInitList:
@@ -385,7 +385,7 @@ class DefinitionParser(BaseParser):
             'braced-init-list', '{', '}'
         )
         if exprs is None:
-            return None
+            return None  # ty: ignore[invalid-return-type]
         return ASTBracedInitList(exprs, trailing_comma)
 
     def _parse_expression_list_or_braced_init_list(
@@ -438,9 +438,7 @@ class DefinitionParser(BaseParser):
             if not self.skip_string('('):
                 self.fail("Expected '(' in '%s'." % cast)
 
-            def parser() -> ASTExpression:
-                return self._parse_expression()
-
+            parser = self._parse_expression
             expr = self._parse_expression_fallback([')'], parser)
             self.skip_ws()
             if not self.skip_string(')'):
@@ -459,10 +457,7 @@ class DefinitionParser(BaseParser):
             except DefinitionError as e_type:
                 self.pos = pos
                 try:
-
-                    def parser() -> ASTExpression:
-                        return self._parse_expression()
-
+                    parser = self._parse_expression
                     expr = self._parse_expression_fallback([')'], parser)
                     prefix = ASTTypeId(expr, isType=False)
                     if not self.skip_string(')'):
@@ -894,7 +889,7 @@ class DefinitionParser(BaseParser):
         #    id-expression
         self.skip_ws()
         if not self.skip_string_and_ws('<'):
-            return None
+            return None  # ty: ignore[invalid-return-type]
         if self.skip_string('>'):
             return ASTTemplateArgs([], False)
         prev_errors = []
@@ -1043,7 +1038,7 @@ class DefinitionParser(BaseParser):
                 modifier = t
             self.skip_ws()
         if len(names) == 0:
-            return None
+            return None  # ty: ignore[invalid-return-type]
 
         if typ in {
             'auto', 'void', 'bool',
@@ -1423,9 +1418,7 @@ class DefinitionParser(BaseParser):
                     array_ops.append(ASTArray(None))
                     continue
 
-                def parser() -> ASTExpression:
-                    return self._parse_expression()
-
+                parser = self._parse_expression
                 value = self._parse_expression_fallback([']'], parser)
                 if not self.skip_string(']'):
                     self.fail("Expected ']' in end of array operator.")
