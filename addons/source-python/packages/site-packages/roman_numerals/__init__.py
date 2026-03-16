@@ -12,19 +12,17 @@ import sys
 
 TYPE_CHECKING = False
 if TYPE_CHECKING:
-    from typing import Final, TypeVar, final
+    from typing import Final, final
 
     from typing_extensions import Self
-
-    _T = TypeVar('_T')
 else:
 
-    def final(f: _T) -> _T:
+    def final(f):  # NoQA: ANN001, ANN202
         return f
 
 
-__version__: Final = '3.1.0'
-version_info: Final = (3, 1, 0)
+__version__: Final = '4.1.0'
+version_info: Final = (4, 1, 0)
 
 __all__: Final = (
     'MAX',
@@ -70,15 +68,18 @@ class RomanNumeral:
     __slots__ = ('_value',)
     _value: int
 
-    def __init__(self, value: int, /) -> None:
-        if not isinstance(value, int):  # pyright: ignore[reportUnnecessaryIsInstance]
-            value_qualname = type(value).__qualname__
-            msg = f'RomanNumeral: an integer is required, not {value_qualname!r}'
+    def __new__(cls, value: int, /) -> Self:
+        """Construct a RomanNumeral from an integer."""
+        if type(value) is not int:
+            type_name = type(value).__qualname__
+            msg = f'RomanNumeral() argument must be an integer, not {type_name!r}'
             raise TypeError(msg)
         if value < MIN or value > MAX:
-            msg = f'Number out of range (must be between 1 and 3,999). Got {value}.'
+            msg = f'{value} is out of range (must be between 1 and 3,999).'
             raise OutOfRangeError(msg)
-        super().__setattr__('_value', value)
+        obj: Self = object.__new__(cls)  # pyrefly: ignore[bad-assignment]
+        object.__setattr__(obj, '_value', value)
+        return obj
 
     def __int__(self) -> int:
         """Return the integer value of this numeral."""
@@ -114,6 +115,13 @@ class RomanNumeral:
             msg = f'Cannot set the {key!r} attribute.'
             raise AttributeError(msg)
         super().__setattr__(key, value)
+
+    def __delattr__(self, key: str) -> None:
+        """Implement delattr(self, name)."""
+        if key == '_value':
+            msg = f'Cannot delete the {key!r} attribute.'
+            raise AttributeError(msg)
+        super().__delattr__(key)
 
     def to_uppercase(self) -> str:
         """Convert a ``RomanNumeral`` to an uppercase string.
@@ -247,7 +255,7 @@ class RomanNumeral:
         raise InvalidRomanNumeralError(string)
 
 
-_ROMAN_NUMERAL_PREFIXES: Final = [
+_ROMAN_NUMERAL_PREFIXES: Final = (
     (1000, sys.intern('M'), sys.intern('m')),
     (900, sys.intern('CM'), sys.intern('cm')),
     (500, sys.intern('D'), sys.intern('d')),
@@ -261,5 +269,5 @@ _ROMAN_NUMERAL_PREFIXES: Final = [
     (5, sys.intern('V'), sys.intern('v')),
     (4, sys.intern('IV'), sys.intern('iv')),
     (1, sys.intern('I'), sys.intern('i')),
-]
+)
 """Numeral value, uppercase character, and lowercase character."""

@@ -10,6 +10,7 @@ import shutil
 import sys
 import tempfile
 import tomllib
+import warnings
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -17,6 +18,7 @@ from zipfile import ZipFile
 
 from sphinx import package_dir
 from sphinx.config import check_confval_types as _config_post_init
+from sphinx.deprecation import RemovedInSphinx10Warning
 from sphinx.errors import ThemeError
 from sphinx.locale import __
 from sphinx.util import logging
@@ -28,6 +30,8 @@ if TYPE_CHECKING:
     from typing import Any, Required, TypedDict
 
     from sphinx.application import Sphinx
+    from sphinx.config import Config
+    from sphinx.registry import SphinxComponentRegistry
 
     class _ThemeToml(TypedDict, total=False):
         theme: Required[_ThemeTomlTheme]
@@ -148,13 +152,39 @@ class Theme:
 class HTMLThemeFactory:
     """A factory class for HTML Themes."""
 
-    def __init__(self, app: Sphinx) -> None:
+    def __init__(
+        self,
+        _deprecated_positional_parameter: Sphinx | None = None,
+        /,
+        *,
+        confdir: Path | None = None,
+        app: Sphinx | None = None,
+        config: Config | None = None,
+        registry: SphinxComponentRegistry | None = None,
+    ) -> None:
+        if _deprecated_positional_parameter is not None:
+            warnings.warn(
+                'Positional parameters for HTMLThemeFactory are deprecated, '
+                'and will be removed in Sphinx 10. '
+                'Please use keyword parameters instead.',
+                category=RemovedInSphinx10Warning,
+                stacklevel=2,
+            )
+            app = _deprecated_positional_parameter
+            confdir = app.confdir
+            config = app.config
+            registry = app.registry
+        assert app is not None
+        assert confdir is not None
+        assert config is not None
+        assert registry is not None
         self._app = app
-        self._themes = app.registry.html_themes
+        self._confdir = confdir
+        self._themes = registry.html_themes
         self._entry_point_themes: dict[str, Callable[[], None]] = {}
         self._load_builtin_themes()
-        if getattr(app.config, 'html_theme_path', None):
-            self._load_additional_themes(app.config.html_theme_path)
+        if html_theme_path := getattr(config, 'html_theme_path', None):
+            self._load_additional_themes(html_theme_path)
         self._load_entry_point_themes()
 
     def _load_builtin_themes(self) -> None:
@@ -166,7 +196,7 @@ class HTMLThemeFactory:
     def _load_additional_themes(self, theme_paths: list[str]) -> None:
         """Load additional themes placed at specified directories."""
         for theme_path in theme_paths:
-            abs_theme_path = (self._app.confdir / theme_path).resolve()
+            abs_theme_path = (self._confdir / theme_path).resolve()
             themes = self._find_themes(abs_theme_path)
             for name, theme in themes.items():
                 self._themes[name] = _StrPath(theme)

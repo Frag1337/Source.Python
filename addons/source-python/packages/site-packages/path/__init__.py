@@ -51,7 +51,7 @@ from io import (
 from types import ModuleType
 
 with contextlib.suppress(ImportError):
-    import win32security  # type: ignore[import-not-found]
+    import win32security
 
 with contextlib.suppress(ImportError):
     import pwd
@@ -59,28 +59,28 @@ with contextlib.suppress(ImportError):
 with contextlib.suppress(ImportError):
     import grp
 
+from collections.abc import Generator, Iterable, Iterator
 from typing import (
-    TYPE_CHECKING,
     IO,
+    TYPE_CHECKING,
     Any,
     BinaryIO,
     Callable,
-    Generator,
-    Iterable,
-    Iterator,
     overload,
 )
 
 if TYPE_CHECKING:
-    from typing_extensions import Literal, Never, Self, Union
+    from typing import Union
+
     from _typeshed import (
+        ExcInfo,
         OpenBinaryMode,
         OpenBinaryModeReading,
         OpenBinaryModeUpdating,
         OpenBinaryModeWriting,
         OpenTextMode,
-        ExcInfo,
     )
+    from typing_extensions import Literal, Never, Self
 
     _Match = Union[str, Callable[[str], bool], None]
     _CopyFn = Callable[[str, str], object]
@@ -92,7 +92,7 @@ if TYPE_CHECKING:
 from . import classes, masks, matchers
 from .compat.py38 import removeprefix, removesuffix
 
-__all__ = ['Path', 'TempDir']
+__all__ = ['Path', 'TempDir', 'Traversal']
 
 LINESEPS = ['\r\n', '\r', '\n']
 U_LINESEPS = LINESEPS + ['\u0085', '\u2028', '\u2029']
@@ -1206,7 +1206,7 @@ class Path(str):
                 self, win32security.OWNER_SECURITY_INFORMATION
             )
             sid = desc.GetSecurityDescriptorOwner()
-            account, domain, typecode = win32security.LookupAccountSid(None, sid)
+            account, domain, typecode = win32security.LookupAccountSid(None, sid)  # type: ignore[arg-type]
             return domain + '\\' + account
 
     else:
@@ -1994,7 +1994,7 @@ class TempDir(Path):
         dirname = tempfile.mkdtemp(*args, **kwargs)
         return super().__new__(cls, dirname)
 
-    def __init__(self) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         pass
 
     def __enter__(self) -> Self:

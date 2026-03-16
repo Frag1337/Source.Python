@@ -143,7 +143,7 @@ def test_params(request: Any) -> dict[str, Any]:
 
     if result['shared_result'] and not isinstance(result['shared_result'], str):
         msg = 'You can only provide a string type of value for "shared_result"'
-        raise pytest.Exception(msg)
+        pytest.fail(msg)
     return result
 
 
@@ -151,7 +151,7 @@ def test_params(request: Any) -> dict[str, Any]:
 def app(
     test_params: dict[str, Any],
     app_params: _app_params,
-    make_app: Callable[[], SphinxTestApp],
+    make_app: Callable[..., SphinxTestApp],
     shared_result: SharedResult,
 ) -> Iterator[SphinxTestApp]:
     """Provides the 'sphinx.application.Sphinx' object"""
@@ -183,7 +183,7 @@ def warning(app: SphinxTestApp) -> StringIO:
 
 
 @pytest.fixture
-def make_app(test_params: dict[str, Any]) -> Iterator[Callable[[], SphinxTestApp]]:
+def make_app(test_params: dict[str, Any]) -> Iterator[Callable[..., SphinxTestApp]]:
     """Provides make_app function to initialize SphinxTestApp instance.
     if you want to initialize 'app' in your test function. please use this
     instead of using SphinxTestApp class directory.
