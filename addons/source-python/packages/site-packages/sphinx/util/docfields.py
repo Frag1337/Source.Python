@@ -17,8 +17,6 @@ from sphinx.util import logging
 from sphinx.util.nodes import get_node_line
 
 if TYPE_CHECKING:
-    from typing import TypeAlias, TypeVar
-
     from docutils.nodes import Element, Node
     from docutils.parsers.rst.states import Inliner
 
@@ -26,10 +24,9 @@ if TYPE_CHECKING:
     from sphinx.environment import BuildEnvironment
     from sphinx.util.typing import TextlikeNode
 
-    ObjDescT = TypeVar('ObjDescT')
-    _FieldEntry: TypeAlias = tuple[str, list[Node]]
-    _FieldTypes: TypeAlias = dict[str, list[Node]]
-    _EntriesTriple: TypeAlias = tuple['Field', _FieldEntry | list[_FieldEntry], Element]
+    type _FieldEntry = tuple[str, list[Node]]
+    type _FieldTypes = dict[str, list[Node]]
+    type _EntriesTriple = tuple[Field, _FieldEntry | list[_FieldEntry], Element]
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +115,7 @@ class Field:
         if location is not None:
             with contextlib.suppress(ValueError):
                 lineno = get_node_line(location)
-        ns, messages = role(rolename, target, target, lineno, inliner, {}, [])
+        ns, _messages = role(rolename, target, target, lineno, inliner, {}, [])
         return nodes.inline(target, '', *ns)
 
     def make_xrefs(
@@ -342,7 +339,7 @@ class TypedField(GroupedField):
         return nodes.field('', fieldname, fieldbody)
 
 
-class DocFieldTransformer:
+class DocFieldTransformer[ObjDescT]:
     """Transforms field lists in "doc field" syntax into better-looking
     equivalents, using the field type definitions given on a domain.
     """
@@ -386,7 +383,7 @@ class DocFieldTransformer:
         field_body = cast('nodes.field_body', field[1])
         try:
             # split into field type and argument
-            fieldtype_name, fieldarg = field_name.astext().split(None, 1)
+            fieldtype_name, fieldarg = field_name.astext().split(None, maxsplit=1)
         except ValueError:
             # maybe an argument-less field type?
             fieldtype_name, fieldarg = field_name.astext(), ''
@@ -442,7 +439,7 @@ class DocFieldTransformer:
         if is_typefield:
             # filter out only inline nodes; others will result in invalid
             # markup being written out
-            content = [n for n in content if isinstance(n, nodes.Inline | nodes.Text)]
+            content = [n for n in content if isinstance(n, (nodes.Inline, nodes.Text))]
             if content:
                 types.setdefault(typename, {})[fieldarg] = content
             return
@@ -458,9 +455,12 @@ class DocFieldTransformer:
                 fieldarg = argname
 
         translatable_content = nodes.inline(field_body.rawsource, translatable=True)
-        translatable_content.document = field_body.parent.document
-        translatable_content.source = field_body.parent.source
-        translatable_content.line = field_body.parent.line
+        parent = field_body.parent
+        assert parent is not None
+        assert parent.document is not None
+        translatable_content.document = parent.document
+        translatable_content.source = parent.source
+        translatable_content.line = parent.line
         translatable_content += content
 
         # grouped entries need to be collected in one entry, while others

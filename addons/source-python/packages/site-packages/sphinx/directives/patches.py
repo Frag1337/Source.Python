@@ -9,16 +9,16 @@ from docutils.nodes import make_id
 from docutils.parsers.rst import directives
 from docutils.parsers.rst.directives import images, tables
 from docutils.parsers.rst.directives.misc import Meta
-from docutils.parsers.rst.roles import set_classes
 
 from sphinx.directives import optional_int
 from sphinx.locale import __
 from sphinx.util import logging
-from sphinx.util.docutils import SphinxDirective
+from sphinx.util.docutils import SphinxDirective, _normalize_options
 from sphinx.util.nodes import set_source_info
 from sphinx.util.osutil import SEP, relpath
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from typing import ClassVar
 
     from docutils.nodes import Node
@@ -30,12 +30,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class Figure(images.Figure):  # type: ignore[misc]
+class Figure(images.Figure):
     """The figure directive which applies `:name:` option to the figure node
     instead of the image node.
     """
 
-    def run(self) -> list[Node]:
+    def run(self) -> Sequence[Node]:
         name = self.options.pop('name', None)
         result = super().run()
         if len(result) == 2 or isinstance(result[0], nodes.system_message):
@@ -56,12 +56,12 @@ class Figure(images.Figure):  # type: ignore[misc]
         return [figure_node]
 
 
-class CSVTable(tables.CSVTable):  # type: ignore[misc]
+class CSVTable(tables.CSVTable):
     """The csv-table directive which searches a CSV file from Sphinx project's source
     directory when an absolute path is given via :file: option.
     """
 
-    def run(self) -> list[Node]:
+    def run(self) -> Sequence[nodes.table | nodes.system_message]:
         if 'file' in self.options and self.options['file'].startswith((SEP, os.sep)):
             env = self.state.document.settings.env
             filename = Path(self.options['file'])
@@ -72,11 +72,11 @@ class CSVTable(tables.CSVTable):  # type: ignore[misc]
                         'an absolute path as a relative path from source directory. '
                         'Please update your document.'
                     ),
-                    location=(env.docname, self.lineno),
+                    location=(env.current_document.docname, self.lineno),
                 )
             else:
                 abspath = env.srcdir / self.options['file'][1:]
-                doc_dir = env.doc2path(env.docname).parent
+                doc_dir = env.doc2path(env.current_document.docname).parent
                 self.options['file'] = relpath(abspath, doc_dir)
 
         return super().run()
@@ -100,7 +100,7 @@ class Code(SphinxDirective):
     def run(self) -> list[Node]:
         self.assert_has_content()
 
-        set_classes(self.options)
+        self.options = _normalize_options(self.options)
         code = '\n'.join(self.content)
         node = nodes.literal_block(
             code,
@@ -162,7 +162,7 @@ class MathDirective(SphinxDirective):
             latex,
             latex,
             classes=self.options.get('class', []),
-            docname=self.env.docname,
+            docname=self.env.current_document.docname,
             number=None,
             label=label,
         )
@@ -180,7 +180,7 @@ class MathDirective(SphinxDirective):
         # assign label automatically if math_number_all enabled
         if node['label'] == '' or (self.config.math_number_all and not node['label']):  # NoQA: PLC1901
             seq = self.env.new_serialno('sphinx.ext.math#equations')
-            node['label'] = f'{self.env.docname}:{seq}'
+            node['label'] = f'{self.env.current_document.docname}:{seq}'
 
         # no targets and numbers are needed
         if not node['label']:
@@ -188,7 +188,9 @@ class MathDirective(SphinxDirective):
 
         # register label to domain
         domain = self.env.domains.math_domain
-        domain.note_equation(self.env.docname, node['label'], location=node)
+        domain.note_equation(
+            self.env.current_document.docname, node['label'], location=node
+        )
         node['number'] = domain.get_equation_number_for(node['label'])
 
         # add target node
@@ -213,7 +215,7 @@ class Rubric(SphinxDirective):
     }
 
     def run(self) -> list[nodes.rubric | nodes.system_message]:
-        set_classes(self.options)
+        self.options = _normalize_options(self.options)
         rubric_text = self.arguments[0]
         textnodes, messages = self.parse_inline(rubric_text, lineno=self.lineno)
         if 'heading-level' in self.options:

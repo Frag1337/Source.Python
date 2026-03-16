@@ -12,7 +12,6 @@ from sphinx.domains import ObjType
 from sphinx.domains.std import GenericObject, Target
 from sphinx.errors import ExtensionError, SphinxError, VersionRequirementError
 from sphinx.extension import Extension
-from sphinx.io import create_publisher
 from sphinx.locale import __
 from sphinx.parsers import Parser as SphinxParser
 from sphinx.roles import XRefRole
@@ -23,10 +22,10 @@ from sphinx.util.logging import prefixed_warnings
 if TYPE_CHECKING:
     import os
     from collections.abc import Callable, Iterator, Mapping, Sequence
-    from typing import Any, TypeAlias
+    from pathlib import Path
+    from typing import Any
 
     from docutils import nodes
-    from docutils.core import Publisher
     from docutils.nodes import Element, Node, TextElement
     from docutils.parsers import Parser
     from docutils.parsers.rst import Directive
@@ -38,7 +37,7 @@ if TYPE_CHECKING:
     from sphinx.config import Config
     from sphinx.domains import Domain, Index
     from sphinx.environment import BuildEnvironment
-    from sphinx.ext.autodoc import Documenter
+    from sphinx.ext.autodoc._legacy_class_based._documenters import Documenter
     from sphinx.util.docfields import Field
     from sphinx.util.typing import (
         ExtensionMetadata,
@@ -51,15 +50,13 @@ if TYPE_CHECKING:
     # visit/depart function
     # the parameters should be (SphinxTranslator, Element)
     # or any subtype of either, but mypy rejects this.
-    _NodeHandler: TypeAlias = Callable[[Any, Any], None]
-    _NodeHandlerPair: TypeAlias = tuple[_NodeHandler, _NodeHandler | None]
+    type _NodeHandler = Callable[[Any, Any], None]
+    type _NodeHandlerPair = tuple[_NodeHandler, _NodeHandler | None]
 
-    _MathsRenderer: TypeAlias = Callable[[HTML5Translator, nodes.math], None]
-    _MathsBlockRenderer: TypeAlias = Callable[[HTML5Translator, nodes.math_block], None]
-    _MathsInlineRenderers: TypeAlias = tuple[_MathsRenderer, _MathsRenderer | None]
-    _MathsBlockRenderers: TypeAlias = tuple[
-        _MathsBlockRenderer, _MathsBlockRenderer | None
-    ]
+    type _MathsRenderer = Callable[[HTML5Translator, nodes.math], None]
+    type _MathsBlockRenderer = Callable[[HTML5Translator, nodes.math_block], None]
+    type _MathsInlineRenderers = tuple[_MathsRenderer, _MathsRenderer | None]
+    type _MathsBlockRenderers = tuple[_MathsBlockRenderer, _MathsBlockRenderer | None]
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +126,9 @@ class SphinxComponentRegistry:
         #: js_files; list of JS paths or URLs
         self.js_files: list[tuple[str | None, dict[str, Any]]] = []
 
+        #: static directories registered by extensions
+        self.static_dirs: list[Path] = []
+
         #: LaTeX packages; list of package names and its options
         self.latex_packages: list[tuple[str, str | None]] = []
 
@@ -152,9 +152,6 @@ class SphinxComponentRegistry:
 
         #: additional transforms; list of transforms
         self.transforms: list[type[Transform]] = []
-
-        # private cache of Docutils Publishers (file type -> publisher object)
-        self.publishers: dict[str, Publisher] = {}
 
     @property
     def autodoc_attrgettrs(self) -> dict[type, Callable[[Any, str, Any], Any]]:
@@ -375,11 +372,14 @@ class SphinxComponentRegistry:
     def get_source_parsers(self) -> dict[str, type[Parser]]:
         return self.source_parsers
 
-    def create_source_parser(self, app: Sphinx, filename: str) -> Parser:
+    def create_source_parser(
+        self, filename: str, *, config: Config, env: BuildEnvironment
+    ) -> Parser:
         parser_class = self.get_source_parser(filename)
         parser = parser_class()
         if isinstance(parser, SphinxParser):
-            parser.set_application(app)
+            parser._config = config
+            parser._env = env
         return parser
 
     def add_translator(
@@ -410,7 +410,9 @@ class SphinxComponentRegistry:
                     % (builder_name, handlers),
                 ) from exc
 
-    def get_translator_class(self, builder: Builder) -> type[nodes.NodeVisitor]:
+    def get_translator_class(
+        self, builder: type[Builder] | Builder
+    ) -> type[nodes.NodeVisitor]:
         try:
             return self.translators[builder.name]
         except KeyError:
@@ -420,7 +422,9 @@ class SphinxComponentRegistry:
                 msg = f'translator not found for {builder.name}'
                 raise AttributeError(msg) from err
 
-    def create_translator(self, builder: Builder, *args: Any) -> nodes.NodeVisitor:
+    def create_translator(
+        self, builder: type[Builder] | Builder, *args: Any
+    ) -> nodes.NodeVisitor:
         translator_class = self.get_translator_class(builder)
         translator = translator_class(*args)
 
@@ -465,6 +469,11 @@ class SphinxComponentRegistry:
     def add_js_file(self, filename: str | None, **attributes: Any) -> None:
         logger.debug('[app] adding js_file: %r, %r', filename, attributes)
         self.js_files.append((filename, attributes))
+
+    def add_static_dir(self, path: Path) -> None:
+        """Register a static directory for extensions."""
+        logger.debug("[app] adding static_dir: '%s'", path)
+        self.static_dirs.append(path)
 
     def has_latex_package(self, name: str) -> bool:
         packages = self.latex_packages + self.latex_packages_after_hyperref
@@ -588,15 +597,6 @@ class SphinxComponentRegistry:
         from sphinx.environment import _get_env_version
 
         return _get_env_version(app.extensions)
-
-    def get_publisher(self, app: Sphinx, filetype: str) -> Publisher:
-        try:
-            return self.publishers[filetype]
-        except KeyError:
-            pass
-        publisher = create_publisher(app, filetype)
-        self.publishers[filetype] = publisher
-        return publisher
 
 
 def merge_source_suffix(app: Sphinx, config: Config) -> None:

@@ -10,6 +10,7 @@ import pickle
 import sys
 from collections import deque
 from io import StringIO
+from pathlib import Path
 from typing import TYPE_CHECKING, overload
 
 from docutils.parsers.rst import roles
@@ -37,7 +38,6 @@ from sphinx.util.tags import Tags
 if TYPE_CHECKING:
     import os
     from collections.abc import Callable, Collection, Iterable, Sequence, Set
-    from pathlib import Path
     from typing import IO, Any, Final, Literal
 
     from docutils import nodes
@@ -52,7 +52,14 @@ if TYPE_CHECKING:
     from sphinx.config import ENUM, _ConfigRebuild
     from sphinx.domains import Domain, Index
     from sphinx.environment.collectors import EnvironmentCollector
-    from sphinx.ext.autodoc import Documenter, _AutodocProcessDocstringListener
+    from sphinx.ext.autodoc._event_listeners import (
+        _AutodocBeforeProcessSignatureListener,
+        _AutodocProcessBasesListener,
+        _AutodocProcessDocstringListener,
+        _AutodocProcessSignatureListener,
+        _AutodocSkipMemberListener,
+    )
+    from sphinx.ext.autodoc._legacy_class_based._documenters import Documenter
     from sphinx.ext.todo import todo_node
     from sphinx.extension import Extension
     from sphinx.registry import (
@@ -196,7 +203,6 @@ class Sphinx:
         :param pdb: If true, enable the Python debugger on an exception.
         :param exception_on_warning: If true, raise an exception on warnings.
         """
-        self.phase = BuildPhase.INITIALIZATION
         self.verbosity = verbosity
         self._fresh_env_used: bool | None = None
         self.extensions: dict[str, Extension] = {}
@@ -240,7 +246,7 @@ class Sphinx:
         self._fail_on_warnings = bool(warningiserror)
         self.pdb = pdb
         self._exception_on_warning = exception_on_warning
-        logging.setup(self, self._status, self._warning)
+        logging.setup(self, self._status, self._warning, verbosity=verbosity)
 
         self.events = EventManager(self)
 
@@ -255,15 +261,17 @@ class Sphinx:
         self.statuscode = 0
 
         # read config
+        overrides = confoverrides or {}
         self.tags = Tags(tags)
         if confdir is None:
             # set confdir to srcdir if -C given (!= no confdir); a few pieces
             # of code expect a confdir to be set
             self.confdir = self.srcdir
-            self.config = Config({}, confoverrides or {})
+            self.config = Config({}, overrides)
         else:
             self.confdir = _StrPath(confdir).resolve()
-            self.config = Config.read(self.confdir, confoverrides or {}, self.tags)
+            self.config = Config.read(self.confdir, overrides=overrides, tags=self.tags)
+        self.config._verbosity = -1 if self.quiet else self.verbosity
 
         # set up translation infrastructure
         self._init_i18n()
@@ -338,6 +346,12 @@ class Sphinx:
         """
         return self._fresh_env_used
 
+    @property
+    def phase(self) -> BuildPhase:
+        if not hasattr(self, 'builder'):
+            return BuildPhase.INITIALIZATION
+        return self.builder.phase
+
     def _init_i18n(self) -> None:
         """Load translated strings from the configured localedirs if enabled in
         the configuration.
@@ -399,6 +413,8 @@ class Sphinx:
         if self._fresh_env_used:
             self.env.find_files(self.config, self.builder)
 
+        self.env._builder_cls = self.builder.__class__
+
     def preload_builder(self, name: str) -> None:
         self.registry.preload_builder(self, name)
 
@@ -416,7 +432,7 @@ class Sphinx:
     # ---- main "build" method -------------------------------------------------
 
     def build(self, force_all: bool = False, filenames: Sequence[Path] = ()) -> None:
-        self.phase = BuildPhase.READING
+        self.builder.phase = BuildPhase.READING
         try:
             if force_all:
                 self.builder.build_all()
@@ -707,7 +723,7 @@ class Sphinx:
     def connect(
         self,
         event: Literal['autodoc-before-process-signature'],
-        callback: Callable[[Sphinx, Any, bool], None],
+        callback: _AutodocBeforeProcessSignatureListener,
         priority: int = 500,
     ) -> int: ...
 
@@ -715,20 +731,7 @@ class Sphinx:
     def connect(
         self,
         event: Literal['autodoc-process-signature'],
-        callback: Callable[
-            [
-                Sphinx,
-                Literal[
-                    'module', 'class', 'exception', 'function', 'method', 'attribute'
-                ],
-                str,
-                Any,
-                dict[str, bool],
-                str | None,
-                str | None,
-            ],
-            tuple[str | None, str | None] | None,
-        ],
+        callback: _AutodocProcessSignatureListener,
         priority: int = 500,
     ) -> int: ...
 
@@ -736,7 +739,7 @@ class Sphinx:
     def connect(
         self,
         event: Literal['autodoc-process-bases'],
-        callback: Callable[[Sphinx, str, Any, dict[str, bool], list[str]], None],
+        callback: _AutodocProcessBasesListener,
         priority: int = 500,
     ) -> int: ...
 
@@ -744,19 +747,7 @@ class Sphinx:
     def connect(
         self,
         event: Literal['autodoc-skip-member'],
-        callback: Callable[
-            [
-                Sphinx,
-                Literal[
-                    'module', 'class', 'exception', 'function', 'method', 'attribute'
-                ],
-                str,
-                Any,
-                bool,
-                dict[str, bool],
-            ],
-            bool,
-        ],
+        callback: _AutodocSkipMemberListener,
         priority: int = 500,
     ) -> int: ...
 
@@ -933,6 +924,9 @@ class Sphinx:
            ``'env'``) to a string.  However, booleans are still accepted and
            converted internally.
 
+        .. versionadded:: 1.4
+           The *types* parameter.
+
         .. versionadded:: 7.4
            The *description* parameter.
         """
@@ -1108,7 +1102,7 @@ class Sphinx:
 
         .. versionchanged:: 0.6
            Docutils 0.5-style directive classes are now supported.
-        .. deprecated:: 1.8
+        .. versionchanged:: 1.8
            Docutils 0.4-style (function based) directives support is deprecated.
         .. versionchanged:: 1.8
            Add *override* keyword.
@@ -1490,6 +1484,9 @@ class Sphinx:
         A JavaScript file can be added to the specific HTML page when an extension
         calls this method on :event:`html-page-context` event.
 
+        .. seealso::
+           :meth:`add_static_dir` for copying static files to the output directory
+
         .. versionadded:: 0.5
 
         .. versionchanged:: 1.8
@@ -1555,6 +1552,9 @@ class Sphinx:
         A CSS file can be added to the specific HTML page when an extension calls
         this method on :event:`html-page-context` event.
 
+        .. seealso::
+           :meth:`add_static_dir` for copying static files to the output directory
+
         .. versionadded:: 1.0
 
         .. versionchanged:: 1.6
@@ -1577,6 +1577,42 @@ class Sphinx:
             self.builder.add_css_file(  # type: ignore[attr-defined]
                 filename, priority=priority, **kwargs
             )
+
+    def add_static_dir(self, path: str | os.PathLike[str]) -> None:
+        """Register a static directory to include in HTML output.
+
+        The given directory's contents will be copied to the ``_static``
+        directory during an HTML build. Files from extension static directories
+        are copied after theme static files and before any directories from
+        the user-configured ``html_static_path`` setting.
+
+        Sphinx has built-in support for ``static/`` directories in themes;
+        theme developers should only use this method to register further
+        directories to be copied.
+
+        :param path: The path to a directory containing static files.
+                     This is typically relative to the extension's package
+                     directory.
+
+        Example::
+
+            from pathlib import Path
+
+            def setup(app):
+                # All files in this directory are copied to _static/,
+                # preserving the subdirectory structure
+                app.add_static_dir(Path(__file__).parent / 'static')
+
+                # Add JavaScript and CSS files to HTML pages,
+                # the paths are relative to _static/
+                app.add_js_file('js/my_extension.js')
+                app.add_css_file('css/my_extension.css')
+
+        .. versionadded:: 9.1
+        """
+        path = Path(path)
+        logger.debug("[app] adding static_dir: '%s'", path)
+        self.registry.add_static_dir(path)
 
     def add_latex_package(
         self, packagename: str, options: str | None = None, after_hyperref: bool = False
@@ -1637,8 +1673,9 @@ class Sphinx:
         logger.debug('[app] adding autodocumenter: %r', cls)
         from sphinx.ext.autodoc.directive import AutodocDirective
 
-        self.registry.add_documenter(cls.objtype, cls)
-        self.add_directive('auto' + cls.objtype, AutodocDirective, override=override)
+        objtype = cls.objtype
+        self.registry.add_documenter(objtype, cls)
+        self.add_directive('auto' + objtype, AutodocDirective, override=override)
 
     def add_autodoc_attrgetter(
         self, typ: type, getter: Callable[[Any, str, Any], Any]

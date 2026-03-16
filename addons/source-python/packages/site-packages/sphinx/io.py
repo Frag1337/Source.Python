@@ -2,62 +2,51 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
-from docutils.core import Publisher
-from docutils.io import FileInput, NullOutput
+from docutils.io import FileInput
 from docutils.readers import standalone
 from docutils.transforms.references import DanglingReferences
 from docutils.writers import UnfilteredWriter
 
-from sphinx.transforms import AutoIndexUpgrader, DoctreeReadEvent, SphinxTransformer
-from sphinx.transforms.i18n import (
-    Locale,
-    PreserveTranslatableMessages,
-    RemoveTranslatableInline,
-)
-from sphinx.transforms.references import SphinxDomains
+from sphinx.deprecation import RemovedInSphinx10Warning
+from sphinx.transforms import SphinxTransformer
 from sphinx.util import logging
 from sphinx.util.docutils import LoggingReporter
-from sphinx.versioning import UIDTransform
 
 if TYPE_CHECKING:
     from typing import Any
 
     from docutils import nodes
-    from docutils.frontend import Values
     from docutils.io import Input
     from docutils.parsers import Parser
     from docutils.transforms import Transform
 
-    from sphinx.application import Sphinx
     from sphinx.environment import BuildEnvironment
+    from sphinx.util.docutils import _DocutilsSettings
 
 
 logger = logging.getLogger(__name__)
 
+warnings.warn('sphinx.io is deprecated', RemovedInSphinx10Warning, stacklevel=2)
 
-class SphinxBaseReader(standalone.Reader):  # type: ignore[misc]
+
+class SphinxBaseReader(standalone.Reader):  # type: ignore[type-arg]
     """A base class of readers for Sphinx.
 
     This replaces reporter by Sphinx's on generating document.
     """
 
-    transforms: list[type[Transform]] = []
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        from sphinx.application import Sphinx
-
-        if len(args) > 0 and isinstance(args[0], Sphinx):
-            self._app = args[0]
-            self._env = self._app.env
-            args = args[1:]
-
         super().__init__(*args, **kwargs)
+        warnings.warn(
+            'sphinx.io.SphinxBaseReader is deprecated',
+            RemovedInSphinx10Warning,
+            stacklevel=2,
+        )
 
-    def setup(self, app: Sphinx) -> None:
-        self._app = app  # hold application object only for compatibility
-        self._env = app.env
+    transforms: list[type[Transform]] = []
 
     def get_transforms(self) -> list[type[Transform]]:
         transforms = super().get_transforms() + self.transforms
@@ -90,57 +79,53 @@ class SphinxBaseReader(standalone.Reader):  # type: ignore[misc]
 class SphinxStandaloneReader(SphinxBaseReader):
     """A basic document reader for Sphinx."""
 
-    def setup(self, app: Sphinx) -> None:
-        self.transforms = self.transforms + app.registry.get_transforms()
-        super().setup(app)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        warnings.warn(
+            'sphinx.io.SphinxStandaloneReader is deprecated',
+            RemovedInSphinx10Warning,
+            stacklevel=2,
+        )
 
-    def read(self, source: Input, parser: Parser, settings: Values) -> nodes.document:  # type: ignore[type-arg]
+    def _setup_transforms(self, transforms: list[type[Transform]], /) -> None:
+        self.transforms = self.transforms + transforms
+
+    def read(
+        self,
+        source: Input,  # type: ignore[type-arg]
+        parser: Parser,
+        settings: _DocutilsSettings,
+    ) -> nodes.document:
         self.source = source
-        if not self.parser:  # type: ignore[has-type]
+        if not self.parser:
             self.parser = parser
         self.settings = settings
         self.input = self.read_source(settings.env)
         self.parse()
+        assert self.document is not None
         return self.document
 
     def read_source(self, env: BuildEnvironment) -> str:
         """Read content from source and do post-process."""
+        assert self.source is not None
         content = self.source.read()
 
         # emit "source-read" event
         arg = [content]
-        env.events.emit('source-read', env.docname, arg)
+        env.events.emit('source-read', env.current_document.docname, arg)
         return arg[0]
-
-
-class SphinxI18nReader(SphinxBaseReader):
-    """A document reader for i18n.
-
-    This returns the source line number of original text as current source line number
-    to let users know where the error happened.
-    Because the translated texts are partial and they don't have correct line numbers.
-    """
-
-    def setup(self, app: Sphinx) -> None:
-        super().setup(app)
-
-        self.transforms = self.transforms + app.registry.get_transforms()
-        unused = [
-            PreserveTranslatableMessages,
-            Locale,
-            RemoveTranslatableInline,
-            AutoIndexUpgrader,
-            SphinxDomains,
-            DoctreeReadEvent,
-            UIDTransform,
-        ]
-        for transform in unused:
-            if transform in self.transforms:
-                self.transforms.remove(transform)
 
 
 class SphinxDummyWriter(UnfilteredWriter):  # type: ignore[type-arg]
     """Dummy writer module used for generating doctree."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        warnings.warn(
+            'sphinx.io.SphinxDummyWriter is deprecated',
+            RemovedInSphinx10Warning,
+            stacklevel=2,
+        )
 
     supported = ('html',)  # needed to keep "meta" nodes
 
@@ -150,6 +135,11 @@ class SphinxDummyWriter(UnfilteredWriter):  # type: ignore[type-arg]
 
 def SphinxDummySourceClass(source: Any, *args: Any, **kwargs: Any) -> Any:
     """Bypass source object as is to cheat Publisher."""
+    warnings.warn(
+        'sphinx.io.SphinxDummySourceClass is deprecated',
+        RemovedInSphinx10Warning,
+        stacklevel=2,
+    )
     return source
 
 
@@ -159,32 +149,8 @@ class SphinxFileInput(FileInput):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs['error_handler'] = 'sphinx'
         super().__init__(*args, **kwargs)
-
-
-def create_publisher(app: Sphinx, filetype: str) -> Publisher:
-    reader = SphinxStandaloneReader()
-    reader.setup(app)
-
-    parser = app.registry.create_source_parser(app, filetype)
-    if parser.__class__.__name__ == 'CommonMarkParser' and parser.settings_spec == ():
-        # a workaround for recommonmark
-        #   If recommonmark.AutoStrictify is enabled, the parser invokes reST parser
-        #   internally.  But recommonmark-0.4.0 does not provide settings_spec for reST
-        #   parser.  As a workaround, this copies settings_spec for RSTParser to the
-        #   CommonMarkParser.
-        from docutils.parsers.rst import Parser as RSTParser
-
-        parser.settings_spec = RSTParser.settings_spec  # type: ignore[misc]
-
-    pub = Publisher(
-        reader=reader,
-        parser=parser,
-        writer=SphinxDummyWriter(),
-        source_class=SphinxFileInput,
-        destination=NullOutput(),
-    )
-    # Propagate exceptions by default when used programmatically:
-    defaults = {'traceback': True, **app.env.settings}
-    # Set default settings
-    pub.get_settings(**defaults)
-    return pub
+        warnings.warn(
+            'sphinx.io.SphinxFileInput is deprecated',
+            RemovedInSphinx10Warning,
+            stacklevel=2,
+        )

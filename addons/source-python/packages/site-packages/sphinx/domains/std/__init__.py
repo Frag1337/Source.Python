@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar, Final
 
     from docutils.nodes import Element, Node, system_message
-    from docutils.parsers.rst import Directive
 
     from sphinx.addnodes import desc_signature
     from sphinx.application import Sphinx
@@ -36,8 +35,6 @@ if TYPE_CHECKING:
     from sphinx.util.typing import (
         ExtensionMetadata,
         OptionSpec,
-        RoleFunction,
-        TitleGetter,
     )
 
 logger = logging.getLogger(__name__)
@@ -218,7 +215,7 @@ class Target(SphinxDirective):
             ret.insert(0, inode)
         name = self.name
         if ':' in self.name:
-            _, name = self.name.split(':', 1)
+            name = self.name.partition(':')[-1]
 
         std = self.env.domains.standard_domain
         std.note_object(name, fullname, node_id, location=node)
@@ -311,7 +308,10 @@ class Cmdoption(ObjectDescription[str]):
         domain = self.env.domains.standard_domain
         for optname in signode.get('allnames', ()):
             domain.add_program_option(
-                currprogram, optname, self.env.docname, signode['ids'][0]
+                currprogram,
+                optname,
+                self.env.current_document.docname,
+                signode['ids'][0],
             )
 
         # create an index entry
@@ -436,6 +436,7 @@ class Glossary(SphinxDirective):
         in_comment = False
         was_empty = True
         messages: list[Node] = []
+        indent_len = 0
         for line, (source, lineno) in zip(
             self.content, self.content.items, strict=True
         ):
@@ -693,7 +694,7 @@ class ProductionList(SphinxDirective):
 
     @staticmethod
     def separator_node(*, name: str, max_len: int) -> nodes.Text:
-        """Return seperator between 'name' and 'tokens'."""
+        """Return separator between 'name' and 'tokens'."""
         if name:
             return nodes.Text(' ::= '.rjust(max_len - len(name) + 5))
         return nodes.Text(' ' * (max_len + 5))
@@ -725,7 +726,7 @@ class StandardDomain(Domain):
     name = 'std'
     label = 'Default'
 
-    object_types: dict[str, ObjType] = {
+    object_types = {
         'term': ObjType(_('glossary term'), 'term', searchprio=-1),
         'token': ObjType(_('grammar token'), 'token', searchprio=-1),
         'label': ObjType(_('reference label'), 'ref', 'keyword', searchprio=-1),
@@ -735,7 +736,7 @@ class StandardDomain(Domain):
         'doc': ObjType(_('document'), 'doc', searchprio=-1),
     }
 
-    directives: dict[str, type[Directive]] = {
+    directives = {
         'program': Program,
         'cmdoption': Cmdoption,  # old name for backwards compatibility
         'option': Cmdoption,
@@ -744,7 +745,7 @@ class StandardDomain(Domain):
         'glossary': Glossary,
         'productionlist': ProductionList,
     }
-    roles: dict[str, RoleFunction | XRefRole] = {
+    roles = {
         'option': OptionXRefRole(warn_dangling=True),
         'confval': XRefRole(warn_dangling=True),
         'envvar': EnvVarXRefRole(),
@@ -780,7 +781,7 @@ class StandardDomain(Domain):
     }
 
     # labelname -> docname, sectionname
-    _virtual_doc_names: dict[str, tuple[str, str]] = {
+    _virtual_doc_names: Final = {
         'genindex': ('genindex', _('Index')),
         'modindex': ('py-modindex', _('Module Index')),
         'search': ('search', _('Search Page')),
@@ -795,7 +796,7 @@ class StandardDomain(Domain):
     }
 
     # node_class -> (figtype, title_getter)
-    enumerable_nodes: dict[type[Node], tuple[str, TitleGetter | None]] = {
+    enumerable_nodes = {
         nodes.figure: ('figure', None),
         nodes.table: ('table', None),
         nodes.container: ('code-block', None),
@@ -805,9 +806,9 @@ class StandardDomain(Domain):
         super().__init__(env)
 
         # set up enumerable nodes
-        self.enumerable_nodes = copy(
-            self.enumerable_nodes
-        )  # create a copy for this instance
+
+        # create a copy for this instance
+        self.enumerable_nodes = copy(self.enumerable_nodes)  # type: ignore[misc]
         for node, settings in env._registry.enumerable_nodes.items():
             self.enumerable_nodes[node] = settings
 
@@ -860,7 +861,7 @@ class StandardDomain(Domain):
                 docname,
                 location=location,
             )
-        self.objects[objtype, name] = (self.env.docname, labelid)
+        self.objects[objtype, name] = (self.env.current_document.docname, labelid)
 
     @property
     def _terms(self) -> dict[str, tuple[str, str]]:
@@ -874,7 +875,7 @@ class StandardDomain(Domain):
         """
         self.note_object('term', term, labelid, location)
 
-        self._terms[term.lower()] = (self.env.docname, labelid)
+        self._terms[term.lower()] = (self.env.current_document.docname, labelid)
 
     @property
     def progoptions(self) -> dict[tuple[str | None, str], tuple[str, str]]:
@@ -945,7 +946,7 @@ class StandardDomain(Domain):
             node = document.ids[labelid]
             if isinstance(node, nodes.target) and 'refid' in node:
                 # indirect hyperlink targets
-                node = document.ids.get(node['refid'])  # type: ignore[assignment]
+                node = document.ids[node['refid']]
                 labelid = node['names'][0]
             if (
                 node.tagname == 'footnote'
@@ -974,13 +975,13 @@ class StandardDomain(Domain):
                     continue
             else:
                 if (
-                    isinstance(node, nodes.definition_list | nodes.field_list)
+                    isinstance(node, (nodes.definition_list, nodes.field_list))
                     and node.children
                 ):
                     node = cast('nodes.Element', node.children[0])
-                if isinstance(node, nodes.field | nodes.definition_list_item):
+                if isinstance(node, (nodes.field, nodes.definition_list_item)):
                     node = cast('nodes.Element', node.children[0])
-                if isinstance(node, nodes.term | nodes.field_name):
+                if isinstance(node, (nodes.term, nodes.field_name)):
                     sectname = clean_astext(node)
                 else:
                     toctree = next(node.findall(addnodes.toctree), None)
@@ -1043,7 +1044,7 @@ class StandardDomain(Domain):
         if typ == 'ref':
             resolver = self._resolve_ref_xref
         elif typ == 'numref':
-            resolver = self._resolve_numref_xref  # type: ignore[assignment]
+            resolver = self._resolve_numref_xref
         elif typ == 'keyword':
             resolver = self._resolve_keyword_xref
         elif typ == 'doc':
@@ -1092,7 +1093,7 @@ class StandardDomain(Domain):
         target: str,
         node: pending_xref,
         contnode: Element,
-    ) -> nodes.reference | Element | None:
+    ) -> nodes.reference | None:
         if target in self.labels:
             docname, labelid, figname = self.labels.get(target, ('', '', ''))
         else:
@@ -1112,12 +1113,12 @@ class StandardDomain(Domain):
             logger.warning(
                 __('numfig is disabled. :numref: is ignored.'), location=node
             )
-            return contnode
+            return contnode  # type: ignore[return-value]
 
         try:
             fignumber = self.get_fignumber(env, builder, figtype, docname, target_node)
             if fignumber is None:
-                return contnode
+                return contnode  # type: ignore[return-value]
         except ValueError:
             logger.warning(
                 __(
@@ -1126,7 +1127,7 @@ class StandardDomain(Domain):
                 labelid,
                 location=node,
             )
-            return contnode
+            return contnode  # type: ignore[return-value]
 
         try:
             if node['refexplicit']:
@@ -1136,7 +1137,7 @@ class StandardDomain(Domain):
 
             if figname is None and '{name}' in title:
                 logger.warning(__('the link has no caption: %s'), title, location=node)
-                return contnode
+                return contnode  # type: ignore[return-value]
             else:
                 fignum = '.'.join(map(str, fignumber))
                 if '{name}' in title or 'number' in title:
@@ -1152,10 +1153,10 @@ class StandardDomain(Domain):
             logger.warning(
                 __('invalid numfig_format: %s (%r)'), title, exc, location=node
             )
-            return contnode
+            return contnode  # type: ignore[return-value]
         except TypeError:
             logger.warning(__('invalid numfig_format: %s'), title, location=node)
-            return contnode
+            return contnode  # type: ignore[return-value]
 
         return self.build_reference_node(
             fromdocname,
@@ -1235,7 +1236,7 @@ class StandardDomain(Domain):
         if not docname:
             commands = []
             while ws_re.search(target):
-                subcommand, target = ws_re.split(target, 1)
+                subcommand, target = ws_re.split(target, maxsplit=1)
                 commands.append(subcommand)
                 progname = '-'.join(commands)
 
@@ -1371,23 +1372,19 @@ class StandardDomain(Domain):
                 return title_getter(elem)
             else:
                 for subnode in elem:
-                    if isinstance(subnode, nodes.caption | nodes.title):
+                    if isinstance(subnode, (nodes.caption, nodes.title)):
                         return clean_astext(subnode)
 
         return None
 
     def get_enumerable_node_type(self, node: Node) -> str | None:
         """Get type of enumerable nodes."""
-
-        def has_child(node: Element, cls: type) -> bool:
-            return any(isinstance(child, cls) for child in node)
-
         if isinstance(node, nodes.section):
             return 'section'
         elif (
             isinstance(node, nodes.container)
             and 'literal_block' in node
-            and has_child(node, nodes.literal_block)
+            and _has_child(node, nodes.literal_block)
         ):
             # given node is a code-block having caption
             return 'code-block'
@@ -1438,6 +1435,10 @@ class StandardDomain(Domain):
                 return None
         else:
             return None
+
+
+def _has_child(node: Element, cls: type) -> bool:
+    return any(isinstance(child, cls) for child in node)
 
 
 def warn_missing_reference(

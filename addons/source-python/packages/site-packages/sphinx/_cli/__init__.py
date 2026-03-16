@@ -36,12 +36,10 @@ from sphinx.locale import __, init_console
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Sequence
-    from typing import NoReturn, TypeAlias
+    from typing import NoReturn
 
-    _PARSER_SETUP: TypeAlias = Callable[
-        [argparse.ArgumentParser], argparse.ArgumentParser
-    ]
-    _RUNNER: TypeAlias = Callable[[argparse.Namespace], int]
+    type _PARSER_SETUP = Callable[[argparse.ArgumentParser], argparse.ArgumentParser]
+    type _RUNNER = Callable[[argparse.Namespace], int]
 
     from typing import Protocol
 
@@ -64,7 +62,7 @@ def _load_subcommand_descriptions() -> Iterator[tuple[str, str]]:
             # log an error here, but don't fail the full enumeration
             print(f'Failed to load the description for {command}', file=sys.stderr)
         else:
-            yield command, description.split('\n\n', 1)[0]
+            yield command, description.partition('\n\n')[0]
 
 
 class _RootArgumentParser(argparse.ArgumentParser):

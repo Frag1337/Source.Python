@@ -50,13 +50,13 @@ class TitleCollector(EnvironmentCollector):
         for node in doctree.findall(nodes.section):
             visitor = SphinxContentsFilter(doctree)
             node[0].walkabout(visitor)
-            titlenode += visitor.get_entry_text()  # type: ignore[no-untyped-call]
+            titlenode += visitor.get_entry_text()
             break
         else:
             # document has no title
             titlenode += nodes.Text(doctree.get('title', '<no title>'))
-        app.env.titles[app.env.docname] = titlenode
-        app.env.longtitles[app.env.docname] = longtitlenode
+        app.env.titles[app.env.current_document.docname] = titlenode
+        app.env.longtitles[app.env.current_document.docname] = longtitlenode
 
 
 def setup(app: Sphinx) -> ExtensionMetadata:

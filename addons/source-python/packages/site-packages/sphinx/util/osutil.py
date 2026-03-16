@@ -47,8 +47,8 @@ def relative_uri(base: str, to: str) -> str:
     """Return a relative URL from ``base`` to ``to``."""
     if to.startswith(SEP):
         return to
-    b2 = base.split('#')[0].split(SEP)
-    t2 = to.split('#')[0].split(SEP)
+    b2 = base.partition('#')[0].split(SEP)
+    t2 = to.partition('#')[0].split(SEP)
     # remove common segments (except the last segment)
     for x, y in zip(b2[:-1], t2[:-1], strict=False):
         if x != y:
@@ -186,8 +186,6 @@ def _relative_path(path: Path, root: Path, /) -> Path:
     if path.anchor != root.anchor or '..' in root.parts:
         # If the drives are different, no relative path exists.
         return path
-    if sys.version_info[:2] < (3, 12):
-        return Path(os.path.relpath(path, root))
     return path.relative_to(root, walk_up=True)
 
 

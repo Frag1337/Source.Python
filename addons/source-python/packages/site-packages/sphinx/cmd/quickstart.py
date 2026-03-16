@@ -89,7 +89,8 @@ else:
 
 
 # function to get input from terminal -- overridden by the test suite
-def term_input(prompt: str) -> str:
+# Arguments are positional-only to match ``input``.
+def term_input(prompt: str, /) -> str:
     if sys.platform == 'win32':
         # Important: On windows, readline is not enabled by default.  In these
         #            environment, escape sequences have been broken.  To avoid the
@@ -244,8 +245,9 @@ def ask_user(d: dict[str, Any]) -> None:
         print(__('Enter the root path for documentation.'))
         d['path'] = do_prompt(__('Root path for the documentation'), '.', is_path)
 
-    while os.path.isfile(os.path.join(d['path'], 'conf.py')) or os.path.isfile(
-        os.path.join(d['path'], 'source', 'conf.py')
+    d_path: str = d['path']
+    while os.path.isfile(os.path.join(d_path, 'conf.py')) or os.path.isfile(
+        os.path.join(d_path, 'source', 'conf.py')
     ):
         print()
         print(
@@ -356,9 +358,12 @@ def ask_user(d: dict[str, Any]) -> None:
             __('Name of your master document (without suffix)'), 'index'
         )
 
+    d_path = d['path']
+    d_master: str = d['master']
+    d_suffix: str = d['suffix']
     while (
-        os.path.isfile(os.path.join(d['path'], d['master'] + d['suffix']))
-        or os.path.isfile(os.path.join(d['path'], 'source', d['master'] + d['suffix']))
+        os.path.isfile(os.path.join(d_path, d_master + d_suffix))
+        or os.path.isfile(os.path.join(d_path, 'source', d_master + d_suffix))
     ):  # fmt: skip
         print()
         print(
@@ -367,7 +372,7 @@ def ask_user(d: dict[str, Any]) -> None:
                     'Error: the master file %s has already been found in the '
                     'selected root path.'
                 )
-                % (d['master'] + d['suffix'])
+                % (d_master + d_suffix)
             )
         )
         print(__('sphinx-quickstart will not overwrite the existing file.'))
@@ -801,7 +806,7 @@ def main(argv: Sequence[str] = (), /) -> int:
         print('[Interrupted.]')
         return 130  # 128 + SIGINT
 
-    for variable in d.get('variables', []):
+    for variable in d.get('variables', []):  # type: ignore[union-attr]
         try:
             name, value = variable.split('=')
             d[name] = value
