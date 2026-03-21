@@ -7,6 +7,7 @@
 # =============================================================================
 # Source.Python
 from . import Weapon as _Weapon
+from weapons.manager import weapon_manager
 #   Filters
 from filters.weapons import WeaponClassIter
 
